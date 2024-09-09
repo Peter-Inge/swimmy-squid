@@ -225,27 +225,50 @@ function drawScore() {
     ctx.fillText(`Score: ${score}`, 10, 30);
 }
 
-function drawStartScreen() {
+function drawMenuScreen(isGameOver = false) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#FFF';
     ctx.font = 'bold 36px Arial';
-    ctx.fillText('Swimmy Squid', canvas.width / 2 - 120, canvas.height / 2 - 100);
+    
+    if (isGameOver) {
+        ctx.fillText('Game Over!', canvas.width / 2 - 100, canvas.height / 2 - 100);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 70, canvas.height / 2 - 50);
+    } else {
+        ctx.fillText('Swimmy Squid', canvas.width / 2 - 120, canvas.height / 2 - 100);
+    }
     
     ctx.font = '24px Arial';
-    ctx.fillText('Select Difficulty:', canvas.width / 2 - 80, canvas.height / 2 - 20);
+    ctx.fillText('Select Difficulty:', canvas.width / 2 - 80, canvas.height / 2 + 10);
 
     ['easy', 'medium', 'hard'].forEach((diff, index) => {
+        const buttonWidth = 70;
+        const buttonHeight = 30;
+        const buttonSpacing = 10;
+        const startX = canvas.width / 2 - ((buttonWidth * 3 + buttonSpacing * 2) / 2);
+        const buttonX = startX + (buttonWidth + buttonSpacing) * index;
+        const buttonY = canvas.height / 2 + 40;
+
+        // Draw button
         ctx.fillStyle = difficulty === diff ? '#4CAF50' : '#FFF';
-        ctx.fillRect(canvas.width / 2 - 90 + index * 60, canvas.height / 2 + 10, 50, 30);
+        ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+
+        // Draw text
         ctx.fillStyle = difficulty === diff ? '#FFF' : '#000';
         ctx.font = '16px Arial';
-        ctx.fillText(diff.charAt(0).toUpperCase() + diff.slice(1), canvas.width / 2 - 80 + index * 60, canvas.height / 2 + 30);
+        const text = diff.charAt(0).toUpperCase() + diff.slice(1);
+        const textWidth = ctx.measureText(text).width;
+        const textX = buttonX + (buttonWidth - textWidth) / 2;
+        const textY = buttonY + buttonHeight / 2 + 5;
+
+        ctx.fillText(text, textX, textY);
     });
 
     ctx.fillStyle = '#FFF';
     ctx.font = '24px Arial';
-    ctx.fillText('Tap or Press Spacebar to Start', canvas.width / 2 - 160, canvas.height / 2 + 80);
+    ctx.fillText(isGameOver ? 'Tap or Press Spacebar to Restart' : 'Tap or Press Spacebar to Start', 
+                 canvas.width / 2 - 160, canvas.height / 2 + 120);
 }
 
 function gameLoop() {
@@ -256,28 +279,17 @@ function gameLoop() {
     drawSquid();
     drawScore();
 
-    if (!gameStarted) {
-        drawStartScreen();
-    } else if (gameOver) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#FFF';
-        ctx.font = 'bold 48px Arial';
-        ctx.fillText('Game Over!', canvas.width / 2 - 120, canvas.height / 2 - 50);
-        ctx.font = '24px Arial';
-        ctx.fillText(`Final Score: ${score}`, canvas.width / 2 - 70, canvas.height / 2 + 20);
-        ctx.fillText('Tap or Press Spacebar to Restart', canvas.width / 2 - 170, canvas.height / 2 + 70);
+    if (!gameStarted || gameOver) {
+        drawMenuScreen(gameOver);
     }
 
     requestAnimationFrame(gameLoop);
 }
 
 function handleJump() {
-    if (!gameStarted) {
+    if (!gameStarted || gameOver) {
         gameStarted = true;
-    } else if (gameOver) {
         gameOver = false;
-        gameStarted = true;
         squid.y = 300;
         squid.velocity = 0;
         obstacles.length = 0;
@@ -286,6 +298,47 @@ function handleJump() {
         squid.velocity = jumpStrength;
     }
 }
+
+function handleInteraction(x, y) {
+    if (!gameStarted || gameOver) {
+        const buttonWidth = 70;
+        const buttonHeight = 30;
+        const buttonSpacing = 10;
+        const startX = canvas.width / 2 - ((buttonWidth * 3 + buttonSpacing * 2) / 2);
+        const buttonY = canvas.height / 2 + 40;
+        
+        if (y > buttonY && y < buttonY + buttonHeight) {
+            if (x > startX && x < startX + buttonWidth) {
+                difficulty = 'easy';
+            } else if (x > startX + buttonWidth + buttonSpacing && x < startX + 2 * buttonWidth + buttonSpacing) {
+                difficulty = 'medium';
+            } else if (x > startX + 2 * (buttonWidth + buttonSpacing) && x < startX + 3 * buttonWidth + 2 * buttonSpacing) {
+                difficulty = 'hard';
+            } else {
+                handleJump();
+            }
+        } else {
+            handleJump();
+        }
+    } else {
+        handleJump();
+    }
+}
+
+canvas.addEventListener('click', event => {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    handleInteraction(x, y);
+});
+
+canvas.addEventListener('touchstart', event => {
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = event.touches[0].clientX - rect.left;
+    const y = event.touches[0].clientY - rect.top;
+    handleInteraction(x, y);
+});
 
 // Keyboard controls
 document.addEventListener('keydown', event => {
@@ -297,8 +350,32 @@ document.addEventListener('keydown', event => {
 
 // Touch controls
 canvas.addEventListener('touchstart', event => {
-    handleJump();
     event.preventDefault();
+    if (!gameStarted) {
+        const rect = canvas.getBoundingClientRect();
+        const x = event.touches[0].clientX - rect.left;
+        const y = event.touches[0].clientY - rect.top;
+        
+        // Check if touch is within difficulty selection area
+        if (y > canvas.height / 2 + 10 && y < canvas.height / 2 + 40) {
+            const buttonWidth = 70;
+            const buttonSpacing = 10;
+            const startX = canvas.width / 2 - ((buttonWidth * 3 + buttonSpacing * 2) / 2);
+            
+            if (x > startX && x < startX + buttonWidth) {
+                difficulty = 'easy';
+            } else if (x > startX + buttonWidth + buttonSpacing && x < startX + 2 * buttonWidth + buttonSpacing) {
+                difficulty = 'medium';
+            } else if (x > startX + 2 * (buttonWidth + buttonSpacing) && x < startX + 3 * buttonWidth + 2 * buttonSpacing) {
+                difficulty = 'hard';
+            }
+        } else {
+            // If touch is outside difficulty buttons, start the game
+            handleJump();
+        }
+    } else {
+        handleJump();
+    }
 });
 
 // Mouse controls (for easier testing on desktop)
